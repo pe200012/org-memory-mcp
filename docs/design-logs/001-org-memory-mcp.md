@@ -466,3 +466,5 @@ Milestone 1 stops at FTS so the server can ship a complete file-backed system fi
 ## Implementation results
 
 Design phase completed on 2026-06-28. Implementation results will be appended phase by phase.
+
+Skeleton phase completed on 2026-06-28. Added documented module skeletons, TODO function bodies with implementation hints, and a behavior-focused pytest suite covering config, models, Org parsing, registry, storage, indexing, embeddings, service, server wiring, logging, and review workflow. Verification command: `uv run pytest -q`. Current expected result: 36 failed, 4 passed, with failures caused by `NotImplementedError` TODO bodies.
