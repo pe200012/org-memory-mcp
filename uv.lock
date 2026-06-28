@@ -321,6 +321,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
+    { name = "orgparse" },
 ]
 
 [package.dev-dependencies]
@@ -329,10 +330,22 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", extras = ["cli"], specifier = ">=1.28.1" }]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=1.28.1" },
+    { name = "orgparse", specifier = ">=0.4.20251020" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+
+[[package]]
+name = "orgparse"
+version = "0.4.20251020"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/52/a27b9fd19fa3677f4f831d35e1c441769eefac3551f46dc988333661f53c/orgparse-0.4.20251020.tar.gz", hash = "sha256:64415d0f889c90612e5a55db7f350a6ee04a353573489562bb9c479ef4cd100c", size = 40735, upload-time = "2025-10-30T22:35:41.352Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/14/6c0076cc49e14e0071fb7707f4c4e97cc1c44efbcc59fad2b56aeda7ede4/orgparse-0.4.20251020-py3-none-any.whl", hash = "sha256:8738e422aaba1bc0567548a282be60a4a0f1c60bfd6a94c8c977f04fe5de904c", size = 34839, upload-time = "2025-10-30T22:35:40.49Z" },
+]
 
 [[package]]
 name = "packaging"

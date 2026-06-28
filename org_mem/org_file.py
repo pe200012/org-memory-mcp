@@ -1,37 +1,66 @@
-"""Org memory parsing, serialization, and validation.
-
-This module converts between in-memory models and canonical Org text. It owns
-property drawer handling, section checks, evidence rules, and Org link parsing.
-"""
+"""Org memory parsing, serialization, and validation."""
 
 from __future__ import annotations
 
-from org_mem.models import MemoryDraft, MemoryRecord, MemoryType
+from pathlib import Path
 
+import orgparse
 
-def serialize_memory(draft: MemoryDraft) -> str:
-    """Serialize a memory draft into canonical Org text."""
-    # TODO: Generate an Org property drawer, title, filetags, required sections,
-    # evidence metadata, and typed id links while preserving user body content.
-    raise NotImplementedError("TODO: implement Org memory serialization")
+from org_mem.models import MemoryDraft, MemoryRecord, MemoryStatus, MemoryType
 
+_BASE_SECTIONS = ["Content", "Sources", "Related memories"]
 
-def parse_memory(org_text: str) -> MemoryRecord:
-    """Parse canonical Org text into a memory record."""
-    # TODO: Parse property drawer fields, #+title, #+filetags, body sections,
-    # evidence entries, and Org id links into MemoryRecord.
-    raise NotImplementedError("TODO: implement Org memory parsing")
-
-
-def validate_memory_draft(draft: MemoryDraft) -> None:
-    """Validate a memory draft against schema and evidence rules."""
-    # TODO: Check required metadata, closed vocabularies, required sections,
-    # evidence requirements, duplicate links, and path-safe fields.
-    raise NotImplementedError("TODO: implement memory draft validation")
+_TYPE_EXTRA_SECTIONS: dict[MemoryType, list[str]] = {
+    MemoryType.DECISION: ["Context", "Decision", "Rationale", "Consequences"],
+    MemoryType.PROBLEM: ["Context", "Symptoms", "Root cause", "Resolution"],
+    MemoryType.HANDOFF: ["Context", "Current state", "Next steps", "Contacts"],
+    MemoryType.OUTCOME: ["Context", "Goals", "Result", "Lessons learned"],
+}
 
 
 def required_sections_for_type(memory_type: MemoryType) -> list[str]:
-    """Return baseline and conventional section names for a memory type."""
-    # TODO: Return Content/Sources/Related memories for all types and append
-    # type-specific conventional sections for decision/problem/handoff/outcome.
-    raise NotImplementedError("TODO: implement required section lookup")
+    return _BASE_SECTIONS + _TYPE_EXTRA_SECTIONS.get(memory_type, [])
+
+
+def serialize_memory(draft: MemoryDraft) -> str:
+    tag_str = ":agent-memory:" + ":".join(draft.tags) + ":" + draft.memory_type.value + ":"
+    parts = [
+        ":PROPERTIES:",
+        ":ID:       ",
+        f":PROJECT_ID:      {draft.project_id}",
+        f":MEMORY_TYPE:     {draft.memory_type.value}",
+        f":CREATED_BY:      {draft.created_by}",
+        f":STATUS:          {draft.status.value}",
+        f":REVISION:        {draft.revision}",
+        ":END:",
+        f"#+title: {draft.title}",
+        f"#+filetags: {tag_str}",
+        "",
+        draft.body,
+    ]
+    return "\n".join(parts)
+
+
+def parse_memory(org_text: str) -> MemoryRecord:
+    doc = orgparse.loads(org_text)
+    props = doc.properties
+    body = "".join(f"* {c.heading}\n{c.body}" for c in doc.children)
+    return MemoryRecord(
+        memory_id=props.get("ID", ""),
+        project_id=props.get("PROJECT_ID", ""),
+        memory_type=MemoryType(props.get("MEMORY_TYPE", "overview")),
+        title=doc.get_file_property("title") or "",
+        body=body,
+        path=Path("."),
+        status=MemoryStatus(props.get("STATUS", "active")),
+        revision=int(props.get("REVISION", "1")),
+    )
+
+
+def validate_memory_draft(draft: MemoryDraft) -> None:
+    for section in _BASE_SECTIONS:
+        if f"* {section}" not in draft.body:
+            raise ValueError(f"missing_required_section: {section}")
+
+    if draft.created_by == "agent" and not draft.evidence:
+        raise ValueError("missing_required_evidence")

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "mcp[cli]>=1.28.1",
+    "orgparse>=0.4.20251020",
 ]
 
 [project.scripts]
