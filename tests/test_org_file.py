@@ -28,6 +28,8 @@ def test_serialize_memory_writes_properties_title_tags_and_body(valid_body, evid
 
     assert ":PROJECT_ID:      effspec-a91c3f" in org_text
     assert ":MEMORY_TYPE:     decision" in org_text
+    assert ":CREATED:" in org_text
+    assert ":UPDATED:" in org_text
     assert "#+title: Preserve heap location during dereference use" in org_text
     assert "#+filetags: :agent-memory:effspec:semantics:decision:" in org_text
     assert "* Content" in org_text
@@ -53,6 +55,9 @@ def test_parse_memory_round_trips_serialized_memory(valid_body, evidence) -> Non
     assert parsed.title == draft.title
     assert parsed.revision == 1
     assert parsed.status.value == "active"
+    assert parsed.tags == ["effspec", "semantics", "decision"]
+    assert parsed.evidence == [Evidence(kind="source", value="File: =EffSpec/Pcc/Semantics.lean="), Evidence(kind="source", value="Theorem: =path_use_preservation=")]
+    assert "* Sources\n\n- File" in parsed.body
 
 
 def test_validate_rejects_missing_required_section(valid_body, evidence) -> None:
@@ -105,4 +110,32 @@ def test_decision_type_has_conventional_sections() -> None:
         "Decision",
         "Rationale",
         "Consequences",
+    ]
+
+
+def test_type_specific_sections_match_design_log() -> None:
+    assert required_sections_for_type(MemoryType.PROBLEM) == [
+        "Content",
+        "Sources",
+        "Related memories",
+        "Symptoms",
+        "Diagnosis",
+        "Fix",
+        "Prevention",
+    ]
+    assert required_sections_for_type(MemoryType.HANDOFF) == [
+        "Content",
+        "Sources",
+        "Related memories",
+        "Current state",
+        "Verification",
+        "Next steps",
+    ]
+    assert required_sections_for_type(MemoryType.OUTCOME) == [
+        "Content",
+        "Sources",
+        "Related memories",
+        "Change",
+        "Evidence",
+        "Follow-up",
     ]

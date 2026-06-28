@@ -94,6 +94,8 @@ class MemoryRecord:
     tags: list[str] = field(default_factory=list)
     evidence: list[Evidence] = field(default_factory=list)
     links: list[MemoryLink] = field(default_factory=list)
+    created: str | None = None
+    updated: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

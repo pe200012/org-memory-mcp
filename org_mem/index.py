@@ -63,7 +63,7 @@ class MemoryIndex:
         )
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
-        # ponytail: in-process dict suffices; no persistence needed for dirty queue
+        # Dirty queue is in-process because Org files are canonical.
         self._dirty: dict[str, bool] = {}
         with self._lock:
             self._conn.executescript(_SCHEMA)
@@ -73,14 +73,17 @@ class MemoryIndex:
         """Rebuild derived index rows for one project from Org files."""
         project_dir = self._config.memory_root / "projects" / project_id
         records: list[tuple[MemoryRecord, Path]] = []
+        errors: list[str] = []
         if project_dir.exists():
             for path in project_dir.rglob("*.org"):
                 try:
                     record = parse_memory(path.read_text(encoding="utf-8"))
                     if record.memory_id:
                         records.append((dataclasses.replace(record, path=path), path))
-                except Exception:
-                    continue
+                except Exception as exc:
+                    errors.append(f"{path}: {exc}")
+        if errors:
+            raise IndexRebuildError("; ".join(errors))
 
         with self._lock:
             row = self._conn.execute(
@@ -240,3 +243,7 @@ class MemoryIndex:
 
         next_cursor = str(rows[-1]["rowid"]) if has_more and rows else None
         return ListPage(items=items, next_cursor=next_cursor)
+
+
+class IndexRebuildError(RuntimeError):
+    """Raised when canonical Org files cannot be indexed safely."""

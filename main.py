@@ -9,9 +9,7 @@ from org_mem.server import run_stdio_server
 
 def main():
     """Run the stdio MCP server."""
-    # TODO: Delegate to run_stdio_server() after server construction and stdio
-    # transport are implemented.
-    raise NotImplementedError("TODO: implement org-mem entrypoint")
+    run_stdio_server()
 
 
 if __name__ == "__main__":

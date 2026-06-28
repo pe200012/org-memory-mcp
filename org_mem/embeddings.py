@@ -10,6 +10,7 @@ import hashlib
 import json
 import urllib.request
 from abc import ABC, abstractmethod
+from typing import Any
 
 from org_mem.models import RankedMemoryId
 
@@ -25,16 +26,26 @@ class EmbeddingProvider(ABC):
 
 
 class LocalEmbeddingProvider(EmbeddingProvider):
-    """Local default embedding provider using a deterministic hash embedding."""
+    """Local embedding provider backed by FastEmbed."""
 
     _DIM = 128
 
     def __init__(self, model: str) -> None:
-        self._model = model  # ponytail: model name stored for future lazy-load
+        self._model = model
+        self._provider: Any | None = None
 
     def embed_text(self, text: str) -> list[float]:
+        if self._model == "local-test":
+            return self._hash_embedding(text)
+        if self._provider is None:
+            from fastembed import TextEmbedding
+
+            self._provider = TextEmbedding(model_name=self._model)
+        vector = next(iter(self._provider.embed([text.strip()])))
+        return [float(value) for value in vector]
+
+    def _hash_embedding(self, text: str) -> list[float]:
         raw = hashlib.sha256(text.strip().lower().encode()).digest()
-        # Tile to _DIM bytes then map to [-1, 1]
         tiled = (raw * (self._DIM // len(raw) + 1))[: self._DIM]
         return [(b / 127.5) - 1.0 for b in tiled]
 

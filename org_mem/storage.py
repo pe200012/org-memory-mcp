@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import date
 from dataclasses import replace as dc_replace
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,16 @@ class RevisionConflict(RuntimeError):
 
 
 def _type_dir(memory_type: MemoryType) -> str:
-    return memory_type.value + "s"
+    return {
+        MemoryType.OVERVIEW: "overview",
+        MemoryType.ARCHITECTURE: "architecture",
+        MemoryType.DECISION: "decisions",
+        MemoryType.INVARIANT: "invariants",
+        MemoryType.CONVENTION: "conventions",
+        MemoryType.PROBLEM: "problems",
+        MemoryType.HANDOFF: "handoffs",
+        MemoryType.OUTCOME: "outcomes",
+    }[memory_type]
 
 
 def _slug(title: str) -> str:
@@ -34,7 +44,7 @@ class MemoryStorage:
 
     def __init__(self, config: Config) -> None:
         self._root = config.memory_root
-        # ponytail: in-process dict as id->path cache; rebuilt lazily by rglob scan
+        # Rebuilt lazily by an rglob scan when a memory ID is first requested.
         self._id_map: dict[str, Path] = {}
 
     def _locate(self, memory_id: str) -> Path:
@@ -52,7 +62,8 @@ class MemoryStorage:
         memory_id = str(uuid.uuid4())
         type_dir = self._root / "projects" / draft.project_id / _type_dir(draft.memory_type)
         type_dir.mkdir(parents=True, exist_ok=True)
-        path = type_dir / f"{_slug(draft.title)}.org"
+        short_id = memory_id.replace("-", "")[:8]
+        path = type_dir / f"{date.today().isoformat()}-{_slug(draft.title)}-{short_id}.org"
         org_text = serialize_memory(draft).replace(":ID:       ", f":ID:       {memory_id}", 1)
         path.write_text(org_text, encoding="utf-8")
         self._id_map[memory_id] = path
@@ -65,6 +76,7 @@ class MemoryStorage:
 
     def _rewrite(self, path: Path, text: str, new_revision: int) -> MemoryRecord:
         text = re.sub(r":REVISION:\s+\d+", f":REVISION:        {new_revision}", text)
+        text = re.sub(r":UPDATED:\s+.*", f":UPDATED:         {_updated_timestamp()}", text)
         path.write_text(text, encoding="utf-8")
         return dc_replace(parse_memory(text), path=path)
 
@@ -85,6 +97,14 @@ class MemoryStorage:
             raise RevisionConflict(f"expected {expected_revision}, got {record.revision}")
         if title is not None:
             text = re.sub(r"#\+title:.*", f"#+title: {title}", text)
+        if body is not None:
+            text = _replace_body(text, body)
+        if tags is not None:
+            tags_part = ":" + ":".join(["agent-memory", *tags, record.memory_type.value]) + ":"
+            text = re.sub(r"#\+filetags:.*", f"#+filetags: {tags_part}", text)
+        if evidence is not None:
+            values = [item["value"] for item in evidence]
+            text = _replace_section(text, "Sources", "\n".join(f"- {value}" for value in values))
         return self._rewrite(path, text, record.revision + 1)
 
     def link_memory(
@@ -143,7 +163,7 @@ class MemoryStorage:
                 raise RevisionConflict(f"expected {expected_revision}, got {existing.revision}")
             revision = existing.revision + 1
 
-        memory_id = str(uuid.uuid4())
+        memory_id = existing.memory_id if path.exists() else str(uuid.uuid4())
         reviewed_lines = "\n".join(
             f"- {r['memory_id']} REVISION={r['revision']}" for r in reviewed_revisions
         )
@@ -154,6 +174,8 @@ class MemoryStorage:
             ":MEMORY_TYPE:     overview",
             ":CREATED_BY:      agent",
             ":STATUS:          active",
+            f":CREATED:         {existing.created if path.exists() else _updated_timestamp()}",
+            f":UPDATED:         {_updated_timestamp()}",
             f":REVISION:        {revision}",
             ":END:",
             f"#+title: Project overview — {project_id}",
@@ -167,3 +189,38 @@ class MemoryStorage:
         path.write_text(org_text, encoding="utf-8")
         self._id_map[memory_id] = path
         return dc_replace(parse_memory(org_text), path=path, memory_id=memory_id)
+
+
+def _updated_timestamp() -> str:
+    from datetime import datetime
+
+    return datetime.now().astimezone().strftime("[%Y-%m-%d %a %H:%M]")
+
+
+def _replace_body(org_text: str, body: str) -> str:
+    lines = org_text.splitlines()
+    for idx, line in enumerate(lines):
+        if line.startswith("* "):
+            return "\n".join(lines[:idx] + [body.rstrip()]) + "\n"
+    return org_text.rstrip() + "\n\n" + body.rstrip() + "\n"
+
+
+def _replace_section(org_text: str, section: str, content: str) -> str:
+    body_start = org_text.find(f"* {section}")
+    if body_start == -1:
+        return org_text.rstrip() + f"\n\n* {section}\n\n{content.rstrip()}\n"
+    lines = org_text.splitlines()
+    start = None
+    for idx, line in enumerate(lines):
+        if line == f"* {section}":
+            start = idx
+            break
+    if start is None:
+        return org_text
+    end = len(lines)
+    for idx in range(start + 1, len(lines)):
+        if lines[idx].startswith("* "):
+            end = idx
+            break
+    replacement = [f"* {section}", "", content.rstrip()]
+    return "\n".join(lines[:start] + replacement + lines[end:]) + "\n"

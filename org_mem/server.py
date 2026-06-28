@@ -13,7 +13,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from org_mem.config import Config, load_config
-from org_mem.models import Evidence, LinkRelation, MemoryDraft, MemoryType
+from org_mem.models import ErrorDetail, Evidence, LinkRelation, MemoryDraft, MemoryType, ToolResponse
 from org_mem.service import MemoryService
 
 
@@ -47,15 +47,20 @@ def create_server(config: Config | None = None) -> FastMCP:
         tags: list[str] | None = None,
         created_by: str = "agent",
     ) -> dict:
-        draft = MemoryDraft(
-            project_id=project_id,
-            memory_type=MemoryType(memory_type),
-            title=title,
-            body=body,
-            evidence=[Evidence(**e) for e in evidence],
-            tags=tags or [],
-            created_by=created_by,
-        )
+        try:
+            draft = MemoryDraft(
+                project_id=project_id,
+                memory_type=MemoryType(memory_type),
+                title=title,
+                body=body,
+                evidence=[Evidence(**e) for e in evidence],
+                tags=tags or [],
+                created_by=created_by,
+            )
+        except ValueError as exc:
+            return ToolResponse.error(
+                ErrorDetail(code="invalid_memory_type", message=str(exc), field="memory_type")
+            ).to_dict()
         return svc.memory_write(draft)
 
     @server.tool()
@@ -106,7 +111,13 @@ def create_server(config: Config | None = None) -> FastMCP:
         note: str | None = None,
         expected_revision: int | None = None,
     ) -> dict:
-        return svc.memory_link(source_id, target_id, LinkRelation(relation), note, expected_revision)
+        try:
+            relation_value = LinkRelation(relation)
+        except ValueError as exc:
+            return ToolResponse.error(
+                ErrorDetail(code="invalid_link_relation", message=str(exc), field="relation")
+            ).to_dict()
+        return svc.memory_link(source_id, target_id, relation_value, note, expected_revision)
 
     @server.tool()
     def memory_archive(

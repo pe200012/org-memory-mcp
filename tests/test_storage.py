@@ -24,9 +24,41 @@ def test_write_memory_creates_type_directory_file(memory_root, data_dir, config_
     record = storage.write_memory(draft)
 
     assert record.path.parent == memory_root / "projects" / "effspec-a91c3f" / "decisions"
+    assert record.path.name[:10].count("-") == 2
+    assert "preserve-heap-location-during-dereference-use" in record.path.name
     assert record.path.name.endswith(".org")
     assert record.revision == 1
     assert record.memory_id in record.path.read_text(encoding="utf-8")
+
+
+def test_write_memory_uses_unique_filename_for_duplicate_titles(memory_root, data_dir, config_path, valid_body, evidence) -> None:
+    storage = MemoryStorage(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+
+    first = storage.write_memory(
+        MemoryDraft(
+            project_id="effspec-a91c3f",
+            memory_type=MemoryType.DECISION,
+            title="Same Title",
+            body=valid_body,
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            created_by="agent",
+        )
+    )
+    second = storage.write_memory(
+        MemoryDraft(
+            project_id="effspec-a91c3f",
+            memory_type=MemoryType.DECISION,
+            title="Same Title",
+            body=valid_body,
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            created_by="agent",
+        )
+    )
+
+    assert first.memory_id != second.memory_id
+    assert first.path != second.path
+    assert first.path.exists()
+    assert second.path.exists()
 
 
 def test_read_memory_returns_stored_record(memory_root, data_dir, config_path, valid_body, evidence) -> None:
@@ -79,10 +111,23 @@ def test_update_memory_increments_revision(memory_root, data_dir, config_path, v
         )
     )
 
-    updated = storage.update_memory(record.memory_id, expected_revision=1, title="Updated")
+    updated_body = valid_body.replace("Dereference-use keeps pointer identity stable.", "Updated body text.")
+    updated = storage.update_memory(
+        record.memory_id,
+        expected_revision=1,
+        title="Updated",
+        body=updated_body,
+        evidence=[{"kind": "file", "value": "Updated.lean"}],
+        tags=["updated", "semantics"],
+    )
 
     assert updated.title == "Updated"
     assert updated.revision == 2
+    assert "Updated body text." in updated.body
+    assert updated.tags == ["updated", "semantics", "decision"]
+    assert Evidence(kind="source", value="Updated.lean") in updated.evidence
+    text = updated.path.read_text(encoding="utf-8")
+    assert ":UPDATED:" in text
 
 
 def test_archive_memory_keeps_file_and_sets_status(memory_root, data_dir, config_path, valid_body, evidence) -> None:
@@ -154,3 +199,23 @@ def test_review_writes_project_overview_with_reviewed_revisions(memory_root, dat
     text = overview.path.read_text(encoding="utf-8")
     assert "0197a8d4-52dc-71ec-a1cb-0f93eb217b38" in text
     assert "REVISION=3" in text
+
+
+def test_review_preserves_project_overview_id_across_updates(memory_root, data_dir, config_path) -> None:
+    storage = MemoryStorage(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+
+    first = storage.write_project_overview(
+        project_id="effspec-a91c3f",
+        overview_body="* Project map\n\nFirst.\n",
+        reviewed_revisions=[{"memory_id": "m1", "revision": 1}],
+        expected_revision=None,
+    )
+    second = storage.write_project_overview(
+        project_id="effspec-a91c3f",
+        overview_body="* Project map\n\nSecond.\n",
+        reviewed_revisions=[{"memory_id": "m1", "revision": 2}],
+        expected_revision=1,
+    )
+
+    assert second.memory_id == first.memory_id
+    assert second.revision == 2
