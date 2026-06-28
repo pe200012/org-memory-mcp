@@ -13,6 +13,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from org_mem.config import Config, load_config
+from org_mem.hints import GUIDE_URI, SCHEMA_URI, WORKFLOW_URI, resource_text
 from org_mem.models import ErrorDetail, Evidence, LinkRelation, MemoryDraft, MemoryType, ToolResponse
 from org_mem.service import MemoryService
 
@@ -32,6 +33,18 @@ def create_server(config: Config | None = None) -> FastMCP:
 
     server = _OrgMemServer("org-mem")
     svc = MemoryService(config)
+
+    @server.resource(GUIDE_URI, name="org-mem-guide", description="Guide for agent use of org-mem tools.")
+    def org_mem_guide() -> str:
+        return resource_text(GUIDE_URI)
+
+    @server.resource(SCHEMA_URI, name="org-mem-schema", description="Schema, type, section, and evidence rules.")
+    def org_mem_schema() -> str:
+        return resource_text(SCHEMA_URI)
+
+    @server.resource(WORKFLOW_URI, name="org-mem-workflow", description="Recommended project memory workflow.")
+    def org_mem_workflow() -> str:
+        return resource_text(WORKFLOW_URI)
 
     @server.tool()
     def memory_project(root_path: str, name_hint: str | None = None) -> dict:
