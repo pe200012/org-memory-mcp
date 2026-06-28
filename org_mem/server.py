@@ -106,6 +106,18 @@ def create_server(config: Config | None = None) -> FastMCP:
         return svc.memory_search(project_id, query, memory_type, status, tags, include_body, include_links, limit)
 
     @server.tool()
+    def memory_global_search(
+        query: str,
+        memory_type: str | None = None,
+        status: str = "active",
+        tags: list[str] | None = None,
+        include_body: bool = False,
+        include_links: bool = False,
+        limit: int = 20,
+    ) -> dict:
+        return svc.memory_global_search(query, memory_type, status, tags, include_body, include_links, limit)
+
+    @server.tool()
     def memory_update(
         memory_id: str,
         expected_revision: int,

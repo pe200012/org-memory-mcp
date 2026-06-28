@@ -18,6 +18,7 @@ def test_create_server_registers_v1_tools(memory_root, data_dir, config_path) ->
         "memory_read",
         "memory_list",
         "memory_search",
+        "memory_global_search",
         "memory_update",
         "memory_link",
         "memory_archive",
@@ -101,6 +102,7 @@ def test_resource_hints_describe_memory_tool_usage(memory_root, data_dir, config
 
     assert "memory_project(root_path" in guide
     assert "memory_search" in guide
+    assert "memory_global_search" in guide
     assert "memory_write" in guide
     assert "expected_revision" in schema
     assert "Content" in schema

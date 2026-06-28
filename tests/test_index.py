@@ -100,3 +100,58 @@ def test_search_rebuilds_when_another_instance_wrote_org_files(
     results = index.search(SearchQuery(project_id="effspec-a91c3f", query="pointer identity"))
 
     assert [result.memory_id for result in results] == [record.memory_id]
+
+
+def test_global_search_returns_hits_across_projects_with_provenance(
+    memory_root, data_dir, config_path, valid_body, evidence
+) -> None:
+    config = Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path)
+    storage = MemoryStorage(config)
+    first = storage.write_memory(
+        MemoryDraft(
+            project_id="effspec-a91c3f",
+            memory_type=MemoryType.DECISION,
+            title="Reusable lock discipline",
+            body=valid_body.replace("pointer identity", "advisory lock reusable workflow"),
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            tags=["workflow"],
+            created_by="agent",
+        )
+    )
+    second = storage.write_memory(
+        MemoryDraft(
+            project_id="klipper-b72a90",
+            memory_type=MemoryType.OUTCOME,
+            title="Reusable SQLite recovery",
+            body=valid_body.replace("pointer identity", "advisory lock reusable workflow"),
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            tags=["workflow"],
+            created_by="agent",
+        )
+    )
+    index = MemoryIndex(config)
+
+    results = index.search_global(query="advisory lock reusable", tags=["workflow"])
+
+    assert {result.memory_id for result in results} == {first.memory_id, second.memory_id}
+    assert {result.project_id for result in results} == {"effspec-a91c3f", "klipper-b72a90"}
+
+
+def test_global_search_rebuilds_changed_project_trees(memory_root, data_dir, config_path, valid_body, evidence) -> None:
+    config = Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path)
+    index = MemoryIndex(config)
+    index.rebuild_project("effspec-a91c3f")
+    record = MemoryStorage(config).write_memory(
+        MemoryDraft(
+            project_id="new-project-123",
+            memory_type=MemoryType.DECISION,
+            title="External global write visibility",
+            body=valid_body.replace("pointer identity", "cross project freshness marker"),
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            created_by="agent",
+        )
+    )
+
+    results = index.search_global(query="freshness marker")
+
+    assert [result.memory_id for result in results] == [record.memory_id]

@@ -120,6 +120,22 @@ class MemoryService:
             results=[dataclasses.asdict(r) for r in results]
         ).to_dict()
 
+    def memory_global_search(
+        self,
+        query: str,
+        memory_type: str | None = None,
+        status: str = "active",
+        tags: list[str] | None = None,
+        include_body: bool = False,
+        include_links: bool = False,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Search memories across all projects after blocking for fresh indexes."""
+        results = self.index.search_global(query, memory_type, status, tags, include_body, include_links, limit)
+        return ToolResponse.ok(
+            results=[dataclasses.asdict(r) for r in results]
+        ).to_dict()
+
     def memory_update(
         self,
         memory_id: str,

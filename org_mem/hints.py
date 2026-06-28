@@ -17,11 +17,12 @@ Use org-mem for durable project memory backed by readable Org files.
 Core pattern:
 1. Start repo work with memory_project(root_path, name_hint=None).
 2. Search before design, review, debugging, and implementation with memory_search.
-3. Write durable facts with memory_write.
-4. Update existing facts with memory_update(memory_id, expected_revision, ...).
-5. Link related records with memory_link.
-6. Archive superseded records with memory_archive.
-7. Refresh the project overview with memory_review after meaningful changes.
+3. Search reusable lessons across projects with memory_global_search for tooling, workflows, architecture patterns, and recurring bug fixes.
+4. Write durable facts with memory_write.
+5. Update existing facts with memory_update(memory_id, expected_revision, ...).
+6. Link related records with memory_link.
+7. Archive superseded records with memory_archive.
+8. Refresh the project overview with memory_review after meaningful changes.
 
 Search first for decisions, conventions, problems, handoffs, architecture notes, and outcomes. Prefer updating an existing memory when the new fact changes the same durable record. Prefer writing a new memory when the fact has a distinct lifecycle or evidence trail.
 """
@@ -59,7 +60,8 @@ WORKFLOW_TEXT = """# org-mem Workflow Guide
 Start:
 1. Call memory_project(root_path=<repo root>).
 2. Search with memory_search(project_id, query, memory_type=None, status="active").
-3. Read relevant records with memory_read(memory_id).
+3. Use memory_global_search(query, memory_type=None, status="active") when prior project experience could help.
+4. Read relevant records with memory_read(memory_id).
 
 During work:
 1. Use memory_write for new durable decisions, conventions, problems, handoffs, and outcomes.

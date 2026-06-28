@@ -151,6 +151,16 @@ class MemoryIndex:
         elif self._needs_rebuild(project_id):
             self.rebuild_project(project_id)
 
+    def wait_until_all_indexes_fresh(self) -> None:
+        """Block until every known project has a fresh derived index."""
+        for project_id in self._known_project_ids():
+            project_dir = self._config.memory_root / "projects" / project_id
+            if project_id in self._dirty:
+                del self._dirty[project_id]
+                self.rebuild_project(project_id)
+            elif self._needs_rebuild(project_id) or not project_dir.exists():
+                self.rebuild_project(project_id)
+
     def is_fresh(self, project_id: str) -> bool:
         """Return whether a project has no pending rebuild work."""
         return project_id not in self._dirty
@@ -159,6 +169,49 @@ class MemoryIndex:
         """Search indexed memories using metadata filters and FTS."""
         self.wait_until_index_fresh(query.project_id)
 
+        rows = self._search_rows(
+            query=query.query,
+            status=query.status,
+            memory_type=query.memory_type,
+            tags=query.tags,
+            limit=query.limit,
+            project_id=query.project_id,
+        )
+        return self._results_from_rows(rows)
+
+    def search_global(
+        self,
+        query: str,
+        memory_type: str | None = None,
+        status: str = "active",
+        tags: list[str] | None = None,
+        include_body: bool = False,
+        include_links: bool = False,
+        limit: int = 20,
+    ) -> list[SearchResult]:
+        """Search indexed memories across every project."""
+        _ = (include_body, include_links)
+        self.wait_until_all_indexes_fresh()
+
+        rows = self._search_rows(
+            query=query,
+            status=status,
+            memory_type=memory_type,
+            tags=tags or [],
+            limit=limit,
+            project_id=None,
+        )
+        return self._results_from_rows(rows)
+
+    def _search_rows(
+        self,
+        query: str,
+        status: str,
+        memory_type: str | None,
+        tags: list[str],
+        limit: int,
+        project_id: str | None,
+    ) -> list[sqlite3.Row]:
         with self._lock:
             sql = (
                 "SELECT m.memory_id, m.project_id, m.title, m.memory_type, m.status,"
@@ -167,27 +220,31 @@ class MemoryIndex:
                 " FROM memories_fts"
                 " JOIN memories m ON memories_fts.memory_id = m.memory_id"
                 " WHERE memories_fts MATCH ?"
-                "   AND m.project_id = ?"
                 "   AND m.status = ?"
             )
-            params: list = [query.query, query.project_id, query.status]
+            params: list = [query, status]
 
-            if query.memory_type:
+            if project_id is not None:
+                sql += " AND m.project_id = ?"
+                params.append(project_id)
+
+            if memory_type:
                 sql += " AND m.memory_type = ?"
-                params.append(query.memory_type)
+                params.append(memory_type)
 
-            for tag in query.tags:
+            for tag in tags:
                 sql += ' AND m.tags LIKE ?'
                 params.append(f'%"{tag}"%')
 
             sql += " ORDER BY rank LIMIT ?"
-            params.append(query.limit)
+            params.append(limit)
 
             try:
-                rows = self._conn.execute(sql, params).fetchall()
+                return self._conn.execute(sql, params).fetchall()
             except sqlite3.OperationalError:
-                rows = []
+                return []
 
+    def _results_from_rows(self, rows: list[sqlite3.Row]) -> list[SearchResult]:
         return [
             SearchResult(
                 memory_id=row["memory_id"],
@@ -273,6 +330,18 @@ class MemoryIndex:
                     (project_id,),
                 ).fetchone()
             return row is None or row["snapshot"] != snapshot
+
+    def _known_project_ids(self) -> list[str]:
+        """Return project IDs discovered from disk, dirty queue, and index rows."""
+        project_ids = set(self._dirty)
+        projects_dir = self._config.memory_root / "projects"
+        with FileLock(self._lock_path):
+            if projects_dir.exists():
+                project_ids.update(path.name for path in projects_dir.iterdir() if path.is_dir())
+            with self._lock:
+                rows = self._conn.execute("SELECT DISTINCT project_id FROM memories").fetchall()
+            project_ids.update(row["project_id"] for row in rows)
+        return sorted(project_ids)
 
     def _project_snapshot(self, project_id: str) -> str:
         """Return a deterministic fingerprint for a project's Org file tree."""

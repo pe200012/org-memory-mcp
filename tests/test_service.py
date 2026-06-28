@@ -35,6 +35,29 @@ def test_service_search_blocks_until_fresh(memory_root, data_dir, config_path) -
     assert service.index.is_fresh("effspec-a91c3f")
 
 
+def test_service_global_search_returns_cross_project_results(
+    memory_root, data_dir, config_path, valid_body, evidence
+) -> None:
+    service = MemoryService(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+    for project_id in ["effspec-a91c3f", "klipper-b72a90"]:
+        service.memory_write(
+            MemoryDraft(
+                project_id=project_id,
+                memory_type=MemoryType.DECISION,
+                title=f"{project_id} reusable workflow",
+                body=valid_body.replace("pointer identity", "durable reusable workflow"),
+                evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+                tags=["workflow"],
+                created_by="agent",
+            )
+        )
+
+    response = service.memory_global_search(query="durable reusable", tags=["workflow"])
+
+    assert response["ok"] is True
+    assert {result["project_id"] for result in response["results"]} == {"effspec-a91c3f", "klipper-b72a90"}
+
+
 def test_service_validation_error_uses_ok_envelope(memory_root, data_dir, config_path, valid_body) -> None:
     service = MemoryService(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
     draft = MemoryDraft(
