@@ -135,22 +135,27 @@ class ToolResponse:
     @classmethod
     def ok(cls, **payload: Any) -> "ToolResponse":
         """Create a successful response envelope."""
-        # TODO: Return a ToolResponse with ok=true and preserve the exact
-        # payload keys expected by MCP callers.
-        raise NotImplementedError("TODO: implement success response envelope")
+        return cls(ok_value=True, payload=payload)
 
     @classmethod
     def error(cls, error: ErrorDetail) -> "ToolResponse":
         """Create a failed response envelope with repair details."""
-        # TODO: Return a ToolResponse with ok=false and serialize ErrorDetail
-        # under the `error` key.
-        raise NotImplementedError("TODO: implement structured error response envelope")
+        return cls(ok_value=False, error_detail=error)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the envelope to a JSON-compatible dictionary."""
-        # TODO: Emit {"ok": true, ...payload} for success and
-        # {"ok": false, "error": {...}} for validation and conflict errors.
-        raise NotImplementedError("TODO: implement response serialization")
+        if self.ok_value:
+            return {"ok": True, **self.payload}
+        detail = self.error_detail
+        return {
+            "ok": False,
+            "error": {
+                "code": detail.code,
+                "message": detail.message,
+                "field": detail.field,
+                "hint": detail.hint,
+            },
+        }
 
 
 @dataclass(frozen=True, slots=True)
