@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from org_mem.config import Config
 from org_mem.index import IndexRebuildError, MemoryIndex
-from org_mem.models import SearchQuery
+from org_mem.models import Evidence, MemoryDraft, MemoryType, SearchQuery
+from org_mem.storage import MemoryStorage
 
 
 def test_rebuild_project_indexes_metadata_and_fts(memory_root, data_dir, config_path) -> None:
@@ -76,3 +77,26 @@ def test_rebuild_project_reports_malformed_org_files(memory_root, data_dir, conf
         assert "bad.org" in str(exc)
     else:
         raise AssertionError("malformed Org file should make rebuild fail")
+
+
+def test_search_rebuilds_when_another_instance_wrote_org_files(
+    memory_root, data_dir, config_path, valid_body, evidence
+) -> None:
+    config = Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path)
+    index = MemoryIndex(config)
+    index.rebuild_project("effspec-a91c3f")
+    storage = MemoryStorage(config)
+    record = storage.write_memory(
+        MemoryDraft(
+            project_id="effspec-a91c3f",
+            memory_type=MemoryType.DECISION,
+            title="External write visibility",
+            body=valid_body,
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            created_by="agent",
+        )
+    )
+
+    results = index.search(SearchQuery(project_id="effspec-a91c3f", query="pointer identity"))
+
+    assert [result.memory_id for result in results] == [record.memory_id]

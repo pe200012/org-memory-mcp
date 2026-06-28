@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from org_mem.config import Config
+from org_mem.locking import FileLock, atomic_write_text, state_lock_path
 from org_mem.models import MemoryType, ProjectInfo
 
 _TYPE_DIRS = {
@@ -42,7 +43,7 @@ def _load(path: Path) -> dict:
 
 def _save(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    atomic_write_text(path, json.dumps(data, indent=2))
 
 
 def _scaffold(project_dir: Path, root: Path, name_hint: str | None) -> None:
@@ -51,9 +52,9 @@ def _scaffold(project_dir: Path, root: Path, name_hint: str | None) -> None:
         (project_dir / dirname).mkdir(exist_ok=True)
     org = project_dir / "project.org"
     if not org.exists():
-        org.write_text(
+        atomic_write_text(
+            org,
             f"#+title: {name_hint or root.name}\n#+root: {root}\n",
-            encoding="utf-8",
         )
 
 
@@ -63,55 +64,59 @@ class ProjectRegistry:
     def __init__(self, config: Config) -> None:
         self._config = config
         self._registry_path = config.data_dir / "projects.json"
+        self._lock_path = state_lock_path(config)
 
     def activate_project(self, root_path: Path, name_hint: str | None = None) -> ProjectInfo:
         """Resolve or create a stable project ID for a root path."""
-        root = root_path.resolve()
-        data = _load(self._registry_path)
-        key = str(root)
+        with FileLock(self._lock_path):
+            root = root_path.resolve()
+            data = _load(self._registry_path)
+            key = str(root)
 
-        if key in data["roots"]:
-            project_id = data["roots"][key]["project_id"]
-            stored_hint = data["roots"][key].get("name_hint")
-        else:
-            project_id = _project_id(name_hint, root)
-            stored_hint = name_hint
-            data["roots"][key] = {"project_id": project_id, "name_hint": name_hint}
-            _save(self._registry_path, data)
+            if key in data["roots"]:
+                project_id = data["roots"][key]["project_id"]
+                stored_hint = data["roots"][key].get("name_hint")
+            else:
+                project_id = _project_id(name_hint, root)
+                stored_hint = name_hint
+                data["roots"][key] = {"project_id": project_id, "name_hint": name_hint}
+                _save(self._registry_path, data)
 
-        project_dir = self._config.memory_root / "projects" / project_id
-        _scaffold(project_dir, root, stored_hint or name_hint)
+            project_dir = self._config.memory_root / "projects" / project_id
+            _scaffold(project_dir, root, stored_hint or name_hint)
 
-        return ProjectInfo(
-            project_id=project_id,
-            root_path=root,
-            name_hint=stored_hint,
-            project_dir=project_dir,
-        )
+            return ProjectInfo(
+                project_id=project_id,
+                root_path=root,
+                name_hint=stored_hint,
+                project_dir=project_dir,
+            )
 
     def get_project(self, project_id: str) -> ProjectInfo:
         """Read an existing project record by project ID."""
-        data = _load(self._registry_path)
-        for root_str, entry in data["roots"].items():
-            if entry["project_id"] == project_id:
-                root = Path(root_str)
-                return ProjectInfo(
-                    project_id=project_id,
-                    root_path=root,
-                    name_hint=entry.get("name_hint"),
-                    project_dir=self._config.memory_root / "projects" / project_id,
-                )
+        with FileLock(self._lock_path):
+            data = _load(self._registry_path)
+            for root_str, entry in data["roots"].items():
+                if entry["project_id"] == project_id:
+                    root = Path(root_str)
+                    return ProjectInfo(
+                        project_id=project_id,
+                        root_path=root,
+                        name_hint=entry.get("name_hint"),
+                        project_dir=self._config.memory_root / "projects" / project_id,
+                    )
         raise KeyError(f"project_id not found: {project_id}")
 
     def ensure_global_project(self) -> ProjectInfo:
         """Ensure the reserved global memory tree exists."""
-        project_id = "global"
-        project_dir = self._config.memory_root / "projects" / project_id
-        root = self._config.memory_root
-        _scaffold(project_dir, root, "global")
-        return ProjectInfo(
-            project_id=project_id,
-            root_path=root,
-            name_hint="global",
-            project_dir=project_dir,
-        )
+        with FileLock(self._lock_path):
+            project_id = "global"
+            project_dir = self._config.memory_root / "projects" / project_id
+            root = self._config.memory_root
+            _scaffold(project_dir, root, "global")
+            return ProjectInfo(
+                project_id=project_id,
+                root_path=root,
+                name_hint="global",
+                project_dir=project_dir,
+            )
