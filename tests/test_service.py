@@ -3,8 +3,24 @@
 from __future__ import annotations
 
 from org_mem.config import Config
+from org_mem.hints import SCHEMA_TEXT, SCHEMA_URI
 from org_mem.models import Evidence, MemoryDraft, MemoryType
 from org_mem.service import MemoryService
+
+
+def test_service_project_activation_returns_schema_guidance(memory_root, data_dir, config_path, tmp_path) -> None:
+    service = MemoryService(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    response = service.memory_project(str(repo_root), name_hint="demo")
+
+    assert response["ok"] is True
+    assert response["schema_uri"] == SCHEMA_URI
+    assert response["schema_text"] == SCHEMA_TEXT
+    assert "Memory types:" in response["schema_text"]
+    assert "Required Org sections:" in response["schema_text"]
+    assert "Agent-written non-overview memories require evidence" in response["schema_text"]
 
 
 def test_service_write_enqueues_reindex(memory_root, data_dir, config_path, valid_body, evidence) -> None:

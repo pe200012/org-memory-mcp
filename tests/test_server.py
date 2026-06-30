@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from org_mem.config import Config
+from org_mem.hints import SCHEMA_TEXT, SCHEMA_URI
 from org_mem.server import create_server, registered_tool_names
 
 
@@ -43,6 +44,27 @@ def test_server_tool_response_uses_ok_envelope(memory_root, data_dir, config_pat
 
     assert response["ok"] is False
     assert response["error"]["code"] == "missing_required_evidence"
+
+
+def test_server_project_activation_returns_schema_guidance(memory_root, data_dir, config_path, tmp_path) -> None:
+    server = create_server(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    response = server.call_tool_sync(
+        "memory_project",
+        {
+            "root_path": str(repo_root),
+            "name_hint": "demo",
+        },
+    )
+
+    assert response["ok"] is True
+    assert response["schema_uri"] == SCHEMA_URI
+    assert response["schema_text"] == SCHEMA_TEXT
+    assert "Memory types:" in response["schema_text"]
+    assert "Required Org sections:" in response["schema_text"]
+    assert "Agent-written non-overview memories require evidence" in response["schema_text"]
 
 
 def test_server_invalid_memory_type_uses_ok_error_envelope(memory_root, data_dir, config_path, valid_body) -> None:

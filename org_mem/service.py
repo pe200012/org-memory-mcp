@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from org_mem.config import Config
+from org_mem.hints import SCHEMA_TEXT, SCHEMA_URI
 from org_mem.index import MemoryIndex
 from org_mem.models import ErrorDetail, LinkRelation, MemoryDraft, SearchQuery, ToolResponse
 from org_mem.registry import ProjectRegistry
@@ -32,6 +33,8 @@ class MemoryService:
             project_id=info.project_id,
             root_path=str(info.root_path),
             project_dir=str(info.project_dir),
+            schema_uri=SCHEMA_URI,
+            schema_text=SCHEMA_TEXT,
         ).to_dict()
 
     def memory_write(self, draft: MemoryDraft) -> dict[str, Any]:
