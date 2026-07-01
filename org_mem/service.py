@@ -193,10 +193,13 @@ class MemoryService:
             info = self.registry.activate_project(Path(root_path), name_hint)
         except (OSError, ValueError) as exc:
             return _error("invalid_root_path", str(exc), field="root_path", hint="Pass a repository root path.")
+        overview_path = info.project_dir / "project.org"
+        project_overview = overview_path.read_text(encoding="utf-8") if overview_path.exists() else ""
         return ToolResponse.ok(
             project_id=info.project_id,
             root_path=str(info.root_path),
             project_dir=str(info.project_dir),
+            project_overview=project_overview,
             schema_uri=SCHEMA_URI,
             schema_text=SCHEMA_TEXT,
         ).to_dict()
