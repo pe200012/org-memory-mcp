@@ -134,6 +134,34 @@ def test_update_memory_increments_revision(memory_root, data_dir, config_path, v
     assert ":UPDATED:" in text
 
 
+def test_update_memory_rejects_extra_evidence_fields(memory_root, data_dir, config_path, valid_body, evidence) -> None:
+    storage = MemoryStorage(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+    record = storage.write_memory(
+        MemoryDraft(
+            project_id="effspec-a91c3f",
+            memory_type=MemoryType.DECISION,
+            title="Original",
+            body=valid_body,
+            evidence=[Evidence(kind="symbol", value=evidence[0]["value"])],
+            created_by="agent",
+        )
+    )
+
+    with pytest.raises(ValueError, match="unsupported field\\(s\\): line, result"):
+        storage.update_memory(
+            record.memory_id,
+            expected_revision=1,
+            evidence=[
+                {
+                    "kind": "file",
+                    "value": "org_mem/storage.py",
+                    "line": 102,
+                    "result": {"ok": True},
+                }
+            ],
+        )
+
+
 def test_archive_memory_keeps_file_and_sets_status(memory_root, data_dir, config_path, valid_body, evidence) -> None:
     storage = MemoryStorage(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
     record = storage.write_memory(

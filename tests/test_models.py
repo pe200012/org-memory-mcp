@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from org_mem.models import (
     ErrorDetail,
     Evidence,
@@ -55,6 +57,27 @@ def test_memory_draft_captures_write_input(valid_body, evidence) -> None:
     assert draft.memory_type is MemoryType.DECISION
     assert draft.status is MemoryStatus.ACTIVE
     assert draft.revision == 1
+
+
+def test_evidence_uses_exact_kind_value_fields() -> None:
+    evidence = Evidence(kind="symbol", value="path_use_preservation")
+
+    assert evidence.kind == "symbol"
+    assert evidence.value == "path_use_preservation"
+
+    with pytest.raises(TypeError, match="positional"):
+        Evidence({"kind": "file", "value": "org_mem/service.py"})
+
+    with pytest.raises(TypeError, match="line"):
+        Evidence(kind="file", value="org_mem/service.py", line=40)
+
+
+def test_evidence_rejects_non_string_fields() -> None:
+    with pytest.raises(ValueError, match="field 'kind' must be a string"):
+        Evidence(kind=123, value="org_mem/service.py")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="field 'value' must be a string"):
+        Evidence(kind="file", value={"path": "org_mem/service.py"})  # type: ignore[arg-type]
 
 
 def test_tool_response_success_shape_is_machine_readable() -> None:

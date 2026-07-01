@@ -45,12 +45,65 @@ class LinkRelation(str, Enum):
     MENTIONS = "mentions"
 
 
+EVIDENCE_REQUIREMENTS_HINT = (
+    "Each evidence item must be an object with exactly the string keys 'kind' and 'value'."
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Evidence:
     """Source evidence for an agent-written memory."""
 
     kind: str
     value: str
+
+    def __post_init__(self) -> None:
+        _require_evidence_string("kind", self.kind, "evidence item")
+        _require_evidence_string("value", self.value, "evidence item")
+
+
+_EVIDENCE_KEYS = {"kind", "value"}
+
+
+def coerce_evidence(item: Evidence | dict[str, Any], index: int | None = None) -> Evidence:
+    """Validate one JSON evidence object and return the internal value object."""
+    label = f"evidence[{index}]" if index is not None else "evidence item"
+    if isinstance(item, Evidence):
+        _require_evidence_string("kind", item.kind, label)
+        _require_evidence_string("value", item.value, label)
+        return item
+    if not isinstance(item, dict):
+        raise ValueError(f"invalid_evidence: {label} must be an object with kind and value")
+
+    missing = [key for key in ("kind", "value") if key not in item]
+    if missing:
+        raise ValueError(f"invalid_evidence: {label} missing required field: {missing[0]}")
+
+    extra = sorted(set(item) - _EVIDENCE_KEYS)
+    if extra:
+        raise ValueError(f"invalid_evidence: {label} has unsupported field(s): {', '.join(extra)}")
+
+    kind = item["kind"]
+    value = item["value"]
+    _require_evidence_string("kind", kind, label)
+    _require_evidence_string("value", value, label)
+    return Evidence(kind=kind, value=value)
+
+
+def coerce_evidence_items(evidence: list[Evidence | dict[str, Any]]) -> list[Evidence]:
+    """Validate all evidence objects and keep precise item indexes in errors."""
+    return [coerce_evidence(item, index) for index, item in enumerate(evidence)]
+
+
+def evidence_source_text(item: Evidence | dict[str, Any]) -> str:
+    """Render one evidence object as a stable Org Sources entry."""
+    evidence = coerce_evidence(item)
+    return evidence.value
+
+
+def _require_evidence_string(field: str, value: Any, label: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"invalid_evidence: {label} field '{field}' must be a string")
 
 
 @dataclass(frozen=True, slots=True)

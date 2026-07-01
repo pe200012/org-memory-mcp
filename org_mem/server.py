@@ -14,8 +14,19 @@ from mcp.server.fastmcp import FastMCP
 
 from org_mem.config import Config, load_config
 from org_mem.hints import GUIDE_URI, SCHEMA_URI, WORKFLOW_URI, resource_text
-from org_mem.models import ErrorDetail, Evidence, LinkRelation, MemoryDraft, MemoryType, ToolResponse
+from org_mem.models import (
+    EVIDENCE_REQUIREMENTS_HINT,
+    ErrorDetail,
+    LinkRelation,
+    MemoryDraft,
+    MemoryType,
+    ToolResponse,
+    coerce_evidence_items,
+)
 from org_mem.service import MemoryService
+
+_MEMORY_TYPE_HINT = "Use one of: " + ", ".join(item.value for item in MemoryType) + "."
+_LINK_RELATION_HINT = "Use one of: " + ", ".join(item.value for item in LinkRelation) + "."
 
 
 class _OrgMemServer(FastMCP):
@@ -24,6 +35,23 @@ class _OrgMemServer(FastMCP):
     def call_tool_sync(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         contents = asyncio.run(self.call_tool(name, arguments))
         return json.loads(contents[0].text)
+
+
+def _value_error_response(exc: ValueError, fallback_code: str, field: str) -> dict:
+    """Map input conversion errors to repairable tool envelopes."""
+    message = str(exc)
+    code = message.split(":", 1)[0]
+    if code == "invalid_evidence":
+        return ToolResponse.error(
+            ErrorDetail(
+                code="invalid_evidence",
+                message=message,
+                field="evidence",
+                hint=EVIDENCE_REQUIREMENTS_HINT,
+            )
+        ).to_dict()
+    hint = _MEMORY_TYPE_HINT if field == "memory_type" else None
+    return ToolResponse.error(ErrorDetail(code=fallback_code, message=message, field=field, hint=hint)).to_dict()
 
 
 def create_server(config: Config | None = None) -> FastMCP:
@@ -56,7 +84,7 @@ def create_server(config: Config | None = None) -> FastMCP:
         memory_type: str,
         title: str,
         body: str,
-        evidence: list[dict],
+        evidence: list[dict[str, Any]],
         tags: list[str] | None = None,
         created_by: str = "agent",
     ) -> dict:
@@ -66,14 +94,12 @@ def create_server(config: Config | None = None) -> FastMCP:
                 memory_type=MemoryType(memory_type),
                 title=title,
                 body=body,
-                evidence=[Evidence(**e) for e in evidence],
+                evidence=coerce_evidence_items(evidence),
                 tags=tags or [],
                 created_by=created_by,
             )
         except ValueError as exc:
-            return ToolResponse.error(
-                ErrorDetail(code="invalid_memory_type", message=str(exc), field="memory_type")
-            ).to_dict()
+            return _value_error_response(exc, fallback_code="invalid_memory_type", field="memory_type")
         return svc.memory_write(draft)
 
     @server.tool()
@@ -140,7 +166,12 @@ def create_server(config: Config | None = None) -> FastMCP:
             relation_value = LinkRelation(relation)
         except ValueError as exc:
             return ToolResponse.error(
-                ErrorDetail(code="invalid_link_relation", message=str(exc), field="relation")
+                ErrorDetail(
+                    code="invalid_link_relation",
+                    message=str(exc),
+                    field="relation",
+                    hint=_LINK_RELATION_HINT,
+                )
             ).to_dict()
         return svc.memory_link(source_id, target_id, relation_value, note, expected_revision)
 

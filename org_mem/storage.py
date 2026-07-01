@@ -15,7 +15,7 @@ from typing import Any
 
 from org_mem.config import Config
 from org_mem.locking import FileLock, atomic_write_text, state_lock_path
-from org_mem.models import LinkRelation, MemoryDraft, MemoryRecord, MemoryType
+from org_mem.models import LinkRelation, MemoryDraft, MemoryRecord, MemoryType, evidence_source_text
 from org_mem.org_file import parse_memory, serialize_memory, validate_memory_draft
 
 
@@ -90,7 +90,7 @@ class MemoryStorage:
         expected_revision: int,
         title: str | None = None,
         body: str | None = None,
-        evidence: list[dict[str, str]] | None = None,
+        evidence: list[dict[str, Any]] | None = None,
         tags: list[str] | None = None,
     ) -> MemoryRecord:
         """Update an existing memory with optimistic concurrency."""
@@ -108,7 +108,7 @@ class MemoryStorage:
                 tags_part = ":" + ":".join(["agent-memory", *tags, record.memory_type.value]) + ":"
                 text = re.sub(r"#\+filetags:.*", f"#+filetags: {tags_part}", text)
             if evidence is not None:
-                values = [item["value"] for item in evidence]
+                values = [evidence_source_text(item) for item in evidence]
                 text = _replace_section(text, "Sources", "\n".join(f"- {value}" for value in values))
             return self._rewrite(path, text, record.revision + 1)
 

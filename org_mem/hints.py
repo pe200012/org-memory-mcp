@@ -50,7 +50,7 @@ Type-specific sections:
 - handoff: Current state, Verification, Next steps
 - outcome: Change, Evidence, Follow-up
 
-Agent-written non-overview memories require evidence. Good evidence names concrete file paths, symbols, commands, test results, issue links, external URLs, or user decisions.
+Agent-written non-overview memories require evidence. Each evidence item is a JSON object with exactly the string keys "kind" and "value". Good evidence names concrete file paths, symbols, commands, test results, issue links, external URLs, or user decisions.
 
 Updates use optimistic concurrency. Read the current memory, keep its revision, and call memory_update(memory_id, expected_revision, ...). Stale expected_revision values produce a revision_conflict response.
 """

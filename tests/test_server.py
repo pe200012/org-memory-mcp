@@ -67,6 +67,89 @@ def test_server_project_activation_returns_schema_guidance(memory_root, data_dir
     assert "Agent-written non-overview memories require evidence" in response["schema_text"]
 
 
+def test_server_memory_write_rejects_extra_evidence_fields(memory_root, data_dir, config_path, valid_body) -> None:
+    server = create_server(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+
+    response = server.call_tool_sync(
+        "memory_write",
+        {
+            "project_id": "effspec-a91c3f",
+            "memory_type": "decision",
+            "title": "Rich evidence",
+            "body": valid_body,
+            "evidence": [
+                {
+                    "kind": "file",
+                    "value": "org_mem/service.py",
+                    "file": "org_mem/service.py",
+                    "line": 40,
+                    "result": {"ok": True, "tests": ["tests/test_server.py"]},
+                }
+            ],
+            "created_by": "agent",
+        },
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "invalid_evidence"
+    assert response["error"]["field"] == "evidence"
+    assert "unsupported field(s): file, line, result" in response["error"]["message"]
+    assert "exactly" in response["error"]["hint"]
+
+
+def test_server_memory_write_reports_invalid_evidence_reason(memory_root, data_dir, config_path, valid_body) -> None:
+    server = create_server(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+
+    response = server.call_tool_sync(
+        "memory_write",
+        {
+            "project_id": "effspec-a91c3f",
+            "memory_type": "decision",
+            "title": "Bad evidence",
+            "body": valid_body,
+            "evidence": [{"kind": "file", "path": "org_mem/service.py"}],
+            "created_by": "agent",
+        },
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "invalid_evidence"
+    assert response["error"]["field"] == "evidence"
+    assert "missing required field: value" in response["error"]["message"]
+    assert "kind" in response["error"]["hint"]
+    assert "value" in response["error"]["hint"]
+
+
+def test_server_memory_update_reports_invalid_evidence_reason(memory_root, data_dir, config_path, valid_body) -> None:
+    server = create_server(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
+    created = server.call_tool_sync(
+        "memory_write",
+        {
+            "project_id": "effspec-a91c3f",
+            "memory_type": "decision",
+            "title": "Valid evidence",
+            "body": valid_body,
+            "evidence": [{"kind": "file", "value": "org_mem/service.py"}],
+            "created_by": "agent",
+        },
+    )
+
+    response = server.call_tool_sync(
+        "memory_update",
+        {
+            "memory_id": created["memory_id"],
+            "expected_revision": 1,
+            "evidence": [{"value": "org_mem/service.py", "line": 40}],
+        },
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "invalid_evidence"
+    assert response["error"]["field"] == "evidence"
+    assert "missing required field: kind" in response["error"]["message"]
+    assert "exactly" in response["error"]["hint"]
+
+
 def test_server_invalid_memory_type_uses_ok_error_envelope(memory_root, data_dir, config_path, valid_body) -> None:
     server = create_server(Config(memory_root=memory_root, data_dir=data_dir, config_path=config_path))
 
@@ -84,6 +167,8 @@ def test_server_invalid_memory_type_uses_ok_error_envelope(memory_root, data_dir
 
     assert response["ok"] is False
     assert response["error"]["code"] == "invalid_memory_type"
+    assert response["error"]["field"] == "memory_type"
+    assert "decision" in response["error"]["hint"]
 
 
 def test_server_invalid_link_relation_uses_ok_error_envelope(memory_root, data_dir, config_path) -> None:
@@ -100,6 +185,8 @@ def test_server_invalid_link_relation_uses_ok_error_envelope(memory_root, data_d
 
     assert response["ok"] is False
     assert response["error"]["code"] == "invalid_link_relation"
+    assert response["error"]["field"] == "relation"
+    assert "supports" in response["error"]["hint"]
 
 
 def test_create_server_registers_resource_hints(memory_root, data_dir, config_path) -> None:
