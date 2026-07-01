@@ -52,6 +52,10 @@ Type-specific sections:
 
 Agent-written non-overview memories require evidence. Each evidence item is a JSON object with exactly the string keys "kind" and "value". Good evidence names concrete file paths, symbols, commands, test results, issue links, external URLs, or user decisions.
 
+Write Sources lines as "- kind :: value" to preserve the evidence kind (e.g. "- file :: org_mem/service.py", "- command :: uv run pytest"). Plain "- value" lines still parse with kind "source".
+
+Lifecycle statuses: active, superseded, archived. A memory_link with relation "supersedes" automatically marks the target superseded, so default search (status="active") returns only current memories. Read history with status="superseded". Remove a wrong link with memory_unlink(source_id, target_id, relation); it does not reactivate a superseded target.
+
 Updates use optimistic concurrency. Read the current memory, keep its revision, and call memory_update(memory_id, expected_revision, ...). Stale expected_revision values produce a revision_conflict response.
 """
 

@@ -281,8 +281,6 @@ class MemoryService:
         memory_type: str | None = None,
         status: str = "active",
         tags: list[str] | None = None,
-        include_body: bool = False,
-        include_links: bool = False,
         limit: int = 20,
     ) -> dict[str, Any]:
         """Search memories after blocking for fresh derived indexes."""
@@ -294,8 +292,6 @@ class MemoryService:
             memory_type=memory_type,
             status=status,
             tags=tags or [],
-            include_body=include_body,
-            include_links=include_links,
             limit=limit,
         )
         try:
@@ -312,8 +308,6 @@ class MemoryService:
         memory_type: str | None = None,
         status: str = "active",
         tags: list[str] | None = None,
-        include_body: bool = False,
-        include_links: bool = False,
         limit: int = 20,
     ) -> dict[str, Any]:
         """Search memories across all projects after blocking for fresh indexes."""
@@ -325,8 +319,6 @@ class MemoryService:
                 memory_type,
                 status,
                 tags,
-                include_body,
-                include_links,
                 limit,
             )
         except IndexRebuildError as exc:
@@ -376,6 +368,30 @@ class MemoryService:
             )
         try:
             record = self.storage.link_memory(source_id, target_id, relation, note, expected_revision)
+        except RevisionConflict as exc:
+            return _revision_conflict_error(exc)
+        except FileNotFoundError as exc:
+            return _not_found_error(exc)
+        self.index.enqueue_rebuild(record.project_id)
+        return ToolResponse.ok(memory_id=record.memory_id, revision=record.revision).to_dict()
+
+    def memory_unlink(
+        self,
+        source_id: str,
+        target_id: str,
+        relation: LinkRelation,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Remove a typed link. Does not reactivate a superseded target."""
+        if not isinstance(relation, LinkRelation):
+            return _error(
+                "invalid_link_relation",
+                f"invalid_link_relation: {relation!r}",
+                field="relation",
+                hint=_LINK_RELATION_HINT,
+            )
+        try:
+            record = self.storage.unlink_memory(source_id, target_id, relation, expected_revision)
         except RevisionConflict as exc:
             return _revision_conflict_error(exc)
         except FileNotFoundError as exc:

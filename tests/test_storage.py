@@ -129,7 +129,7 @@ def test_update_memory_increments_revision(memory_root, data_dir, config_path, v
     assert updated.revision == 2
     assert "Updated body text." in updated.body
     assert updated.tags == ["updated", "semantics", "decision"]
-    assert Evidence(kind="source", value="Updated.lean") in updated.evidence
+    assert Evidence(kind="file", value="Updated.lean") in updated.evidence
     text = updated.path.read_text(encoding="utf-8")
     assert ":UPDATED:" in text
 
@@ -215,6 +215,7 @@ def test_link_memory_adds_typed_org_id_relation(memory_root, data_dir, config_pa
 
     assert linked.revision == 2
     assert f"[[id:{target.memory_id}][supports: Target]]" in linked.path.read_text(encoding="utf-8")
+    assert linked.links[0].note == "used by proof"
 
 
 def test_review_writes_project_overview_with_reviewed_revisions(memory_root, data_dir, config_path) -> None:

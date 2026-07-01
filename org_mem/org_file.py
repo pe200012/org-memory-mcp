@@ -183,21 +183,30 @@ def _parse_sources(body: str) -> list[Evidence]:
     for line in _section_lines(body, "Sources"):
         stripped = line.strip()
         if stripped.startswith("- "):
-            evidence.append(Evidence(kind="source", value=stripped[2:].strip()))
+            item = stripped[2:].strip()
+            # Structured `kind :: value` round-trips the evidence kind; freeform
+            # lines keep the legacy kind="source" so old memories still parse.
+            if " :: " in item:
+                kind, value = item.split(" :: ", 1)
+                evidence.append(Evidence(kind=kind.strip(), value=value.strip()))
+            else:
+                evidence.append(Evidence(kind="source", value=item))
     return evidence
 
 
 def _parse_links(body: str, source_id: str) -> list[MemoryLink]:
     links: list[MemoryLink] = []
     for line in _section_lines(body, "Related memories"):
-        match = re.search(r"\[\[id:([^\]]+)\]\[([^:\]]+):", line)
+        match = re.search(r"\[\[id:([^\]]+)\]\[([^:\]]+):[^\]]*\]\](?:\s*::\s*(.*))?", line)
         if match:
+            note = match.group(3).strip() if match.group(3) else None
             try:
                 links.append(
                     MemoryLink(
                         source_id=source_id,
                         target_id=match.group(1),
                         relation=LinkRelation(match.group(2)),
+                        note=note or None,
                     )
                 )
             except ValueError:

@@ -15,7 +15,7 @@ from typing import Any
 
 from org_mem.config import Config
 from org_mem.locking import FileLock, atomic_write_text, state_lock_path
-from org_mem.models import LinkRelation, MemoryDraft, MemoryRecord, MemoryType, evidence_source_text
+from org_mem.models import LinkRelation, MemoryDraft, MemoryRecord, MemoryType, coerce_evidence_items
 from org_mem.org_file import parse_memory, serialize_memory, validate_memory_draft
 
 
@@ -108,8 +108,10 @@ class MemoryStorage:
                 tags_part = ":" + ":".join(["agent-memory", *tags, record.memory_type.value]) + ":"
                 text = re.sub(r"#\+filetags:.*", f"#+filetags: {tags_part}", text)
             if evidence is not None:
-                values = [evidence_source_text(item) for item in evidence]
-                text = _replace_section(text, "Sources", "\n".join(f"- {value}" for value in values))
+                items = coerce_evidence_items(evidence)
+                text = _replace_section(
+                    text, "Sources", "\n".join(f"- {e.kind} :: {e.value}" for e in items)
+                )
             return self._rewrite(path, text, record.revision + 1)
 
     def link_memory(
@@ -123,7 +125,8 @@ class MemoryStorage:
         """Create a typed Org ID link from one memory to another."""
         with FileLock(self._lock_path):
             target_path = self._locate(target_id)
-            target_record = parse_memory(target_path.read_text(encoding="utf-8"))
+            target_text = target_path.read_text(encoding="utf-8")
+            target_record = parse_memory(target_text)
 
             source_path = self._locate(source_id)
             source_text = source_path.read_text(encoding="utf-8")
@@ -132,8 +135,40 @@ class MemoryStorage:
                 raise RevisionConflict(f"expected {expected_revision}, got {source_record.revision}")
 
             link = f"[[id:{target_id}][{relation.value}: {target_record.title}]]"
-            source_text = source_text.replace("* Related memories", f"* Related memories\n\n- {link}", 1)
+            line = f"- {link} :: {note}" if note else f"- {link}"
+            source_text = source_text.replace("* Related memories", f"* Related memories\n\n{line}", 1)
+
+            # A supersedes edge makes the target no longer current: flip its
+            # status so default search/list hide it. history is still readable.
+            if relation is LinkRelation.SUPERSEDES and target_record.status.value == "active":
+                superseded = re.sub(r":STATUS:\s+\w+", ":STATUS:          superseded", target_text)
+                self._rewrite(target_path, superseded, target_record.revision + 1)
+
             return self._rewrite(source_path, source_text, source_record.revision + 1)
+
+    def unlink_memory(
+        self,
+        source_id: str,
+        target_id: str,
+        relation: LinkRelation,
+        expected_revision: int | None = None,
+    ) -> MemoryRecord:
+        """Remove a typed link from source to target. Does not reactivate targets."""
+        with FileLock(self._lock_path):
+            source_path = self._locate(source_id)
+            source_text = source_path.read_text(encoding="utf-8")
+            source_record = parse_memory(source_text)
+            if expected_revision is not None and source_record.revision != expected_revision:
+                raise RevisionConflict(f"expected {expected_revision}, got {source_record.revision}")
+
+            marker = f"[[id:{target_id}][{relation.value}:"
+            lines = source_text.splitlines()
+            kept = [ln for ln in lines if marker not in ln]
+            if len(kept) == len(lines):
+                raise FileNotFoundError(
+                    f"link {relation.value} -> {target_id} not found on {source_id}"
+                )
+            return self._rewrite(source_path, "\n".join(kept), source_record.revision + 1)
 
     def archive_memory(
         self,

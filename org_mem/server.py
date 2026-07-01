@@ -125,11 +125,9 @@ def create_server(config: Config | None = None) -> FastMCP:
         memory_type: str | None = None,
         status: str = "active",
         tags: list[str] | None = None,
-        include_body: bool = False,
-        include_links: bool = False,
         limit: int = 20,
     ) -> dict:
-        return svc.memory_search(project_id, query, memory_type, status, tags, include_body, include_links, limit)
+        return svc.memory_search(project_id, query, memory_type, status, tags, limit)
 
     @server.tool()
     def memory_global_search(
@@ -137,11 +135,9 @@ def create_server(config: Config | None = None) -> FastMCP:
         memory_type: str | None = None,
         status: str = "active",
         tags: list[str] | None = None,
-        include_body: bool = False,
-        include_links: bool = False,
         limit: int = 20,
     ) -> dict:
-        return svc.memory_global_search(query, memory_type, status, tags, include_body, include_links, limit)
+        return svc.memory_global_search(query, memory_type, status, tags, limit)
 
     @server.tool()
     def memory_update(
@@ -174,6 +170,26 @@ def create_server(config: Config | None = None) -> FastMCP:
                 )
             ).to_dict()
         return svc.memory_link(source_id, target_id, relation_value, note, expected_revision)
+
+    @server.tool()
+    def memory_unlink(
+        source_id: str,
+        target_id: str,
+        relation: str,
+        expected_revision: int | None = None,
+    ) -> dict:
+        try:
+            relation_value = LinkRelation(relation)
+        except ValueError as exc:
+            return ToolResponse.error(
+                ErrorDetail(
+                    code="invalid_link_relation",
+                    message=str(exc),
+                    field="relation",
+                    hint=_LINK_RELATION_HINT,
+                )
+            ).to_dict()
+        return svc.memory_unlink(source_id, target_id, relation_value, expected_revision)
 
     @server.tool()
     def memory_archive(

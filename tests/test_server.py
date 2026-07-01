@@ -22,6 +22,7 @@ def test_create_server_registers_v1_tools(memory_root, data_dir, config_path) ->
         "memory_global_search",
         "memory_update",
         "memory_link",
+        "memory_unlink",
         "memory_archive",
         "memory_review",
     }

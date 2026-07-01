@@ -6,6 +6,7 @@ It should contain no file-system, SQLite, embedding-provider, or MCP code.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -30,6 +31,10 @@ class MemoryStatus(str, Enum):
 
     ACTIVE = "active"
     ARCHIVED = "archived"
+    # Set automatically on the target of a `supersedes` link. Excluded from
+    # default (status="active") search and list, so "what is current" resolves
+    # without any graph traversal. ponytail: status flag, not a bitemporal graph.
+    SUPERSEDED = "superseded"
 
 
 class LinkRelation(str, Enum):
@@ -90,7 +95,7 @@ def coerce_evidence(item: Evidence | dict[str, Any], index: int | None = None) -
     return Evidence(kind=kind, value=value)
 
 
-def coerce_evidence_items(evidence: list[Evidence | dict[str, Any]]) -> list[Evidence]:
+def coerce_evidence_items(evidence: Sequence[Evidence | dict[str, Any]]) -> list[Evidence]:
     """Validate all evidence objects and keep precise item indexes in errors."""
     return [coerce_evidence(item, index) for index, item in enumerate(evidence)]
 
@@ -222,8 +227,6 @@ class SearchQuery:
     memory_type: str | None = None
     status: str = "active"
     tags: list[str] = field(default_factory=list)
-    include_body: bool = False
-    include_links: bool = False
     limit: int = 20
 
 

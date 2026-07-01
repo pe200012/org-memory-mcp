@@ -185,12 +185,9 @@ class MemoryIndex:
         memory_type: str | None = None,
         status: str = "active",
         tags: list[str] | None = None,
-        include_body: bool = False,
-        include_links: bool = False,
         limit: int = 20,
     ) -> list[SearchResult]:
         """Search indexed memories across every project."""
-        _ = (include_body, include_links)
         self.wait_until_all_indexes_fresh()
 
         rows = self._search_rows(
